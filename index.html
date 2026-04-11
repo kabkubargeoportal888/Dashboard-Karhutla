@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard Karhutla WWF</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body { margin:0; font-family:Arial; }
+
+    /* ================= HEADER ================= */
+    #header {
+      position:absolute;
+      top:0;
+      width:100%;
+      height:60px;
+      background:#1f2937;
+      color:white;
+      display:flex;
+      align-items:center;
+      z-index:1000;
+    }
+
+    /* kiri */
+    #left {
+      width:25%;
+      display:flex;
+      align-items:center;
+      padding-left:10px;
+    }
+
+    #logo {
+      height:40px;
+      margin-right:10px;
+    }
+
+    .text b {
+  display: block;
+  color: white;
+  font-size: 18px;
+}
+
+.text p {
+  margin: 0;
+  color: #ddd;
+  font-size: 15px;
+}
+
+    /* tengah */
+    #center {
+      width:50%;
+      text-align:center;
+    }
+
+    #center h2 {
+      margin: 2px;;
+      font-size:18px;
+      text-align: center;
+    }
+
+    #center p {
+      margin: 2px;;
+      font-size:12px;
+      opacity:0.8;
+      text-align: center;
+    }
+
+    /* kanan */
+    #right {
+      position: absolute;
+      top: 10px;
+      right: 10px; /* kunci utama */
+      font-size: 12px;
+      text-align: right;
+      text;
+    }
+
+    /* MAP */
+    #map {
+      position:absolute;
+      top:60px;
+      bottom:0;
+      width:100%;
+    }
+
+    /* PANEL */
+    #panel {
+      position:absolute;
+      top:70px;
+      right:10px;
+      width:300px;
+      background:white;
+      padding:10px;
+      border-radius:5px;
+      box-shadow:0 0 5px rgba(0,0,0,0.3);
+      z-index:1000;
+    }
+
+    button {
+      width:100%;
+      padding:6px;
+      margin-top:5px;
+      cursor:pointer;
+    }
+
+    #status {
+      font-size:12px;
+      color:green;
+    }
+    #legend {
+    position: absolute;
+    bottom: 20px;
+    left: 10px;
+    z-index: 1000;
+    background: rgba(0,0,0,0.6);
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: white;
+    font-size: 12px;
+    }
+
+#legend h4 {
+  margin: 0 0 5px 0;
+  font-size: 13px;
+}
+
+#legend div {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+/* bulatan warna */
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+/* warna kelas hotspot */
+.rendah {
+  background: green;
+}
+
+.sedang {
+  background: orange;
+}
+
+.tinggi {
+  background: red;
+}
+  </style>
+</head>
+
+<body>
+
+<!-- ================= HEADER ================= -->
+<div id="header">
+
+  <!-- KIRI -->
+<div id="left">
+  <img src="img/logo WWF.png" id="logo">
+  
+  <div class="text">
+    <b>WWF Indonesia</b>
+    <p>Mahakam Kayan</p>
+  </div>
+</div>
+
+  <!-- TENGAH -->
+  <div id="center">
+    <h2>🔥 Dashboard Kebakaran Hutan dan Lahan</h2>
+    <p>Monitoring Hotspot Realtime</p>
+  </div>
+
+  <!-- KANAN -->
+  <div id="right">
+    <div id="time"></div>
+  </div>
+
+</div>
+
+<!-- ================= MAP ================= -->
+<div id="map"></div>
+<script src="main.js"></script>
+
+<!-- ================= PANEL ================= -->
+<div id="panel">
+
+  <b>Status</b><br>
+  <div id="status">Loading...</div>
+
+  <hr>
+
+  <b>Jumlah Hotspot</b>
+  <div id="jumlah">0</div>
+
+  <canvas id="chart" height="120"></canvas>
+
+  <hr>
+
+  <button onclick="kirimWA()">📲 Kirim Notifikasi WA</button>
+
+</div>
+
+<div id="legend">
+  <h4>Legenda Hotspot</h4>
+  
+  <div><span class="dot rendah"></span> Rendah</div>
+  <div><span class="dot sedang"></span> Sedang</div>
+  <div><span class="dot tinggi"></span> Tinggi</div>
+</div>
+
+<script>
+
+// ================= JAM =================
+setInterval(() => {
+  document.getElementById("time").innerHTML =
+    new Date().toLocaleString();
+}, 1000);
+
+// ================= MAP =================
+var map = L.map('map').setView([-1.5, 116], 5);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+.addTo(map);
+
+// ambil file JSON
+fetch('data/mahakamkayan.json')
+  .then(res => res.json())
+  .then(data => {
+        const layerMahakam = L.geoJSON(data, {
+
+      // 🎨 STYLE POLYGON
+      style: function(feature) {
+        return {
+          color: "black",      // garis tepi (cyan WWF style)
+          weight: 1,
+          opacity: 1,
+          fillColor: "#FFD700",
+          fillOpacity: 0.2
+        };
+      },
+
+      // 📌 POPUP
+      onEachFeature: function(feature, layer) {
+      let nama = feature.properties?.Name_2 || "Mahakam Kayan";
+
+        layer.bindPopup(`
+          <b>${nama}</b>
+        `);
+      }
+
+    }).addTo(map);
+
+    // 🎯 otomatis zoom ke area
+    map.fitBounds(layerMahakam.getBounds());
+
+  })
+  .catch(err => console.error("Error:", err));
+
+// ================= LAYER =================
+let hotspotLayer = L.layerGroup().addTo(map);
+
+// ================= FIRMS =================
+const urlFIRMS = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/bccce0b9b1a877b217ec174de1bc5fb5/VIIRS_SNPP_NRT/108,-4,120,7/2";
+
+let hotspotCount = 0;
+
+// ================= FETCH =================
+async function fetchFIRMS(){
+
+  try {
+
+    document.getElementById("status").innerHTML = "🔄 Update data...";
+
+    const res = await fetch(urlFIRMS);
+    const text = await res.text();
+
+    const rows = text.split("\n").slice(1);
+
+    hotspotLayer.clearLayers();
+    hotspotCount = 0;
+
+    rows.forEach(row => {
+
+      const col = row.split(",");
+
+      const lat = parseFloat(col[0]);
+      const lon = parseFloat(col[1]);
+      const conf = parseInt(col[9]);
+
+      if(!lat || !lon) return;
+    //  if(conf < 60) return;
+
+      hotspotCount++;
+
+      L.circleMarker([lat, lon], {
+        radius:6,
+        color: getColor(conf)
+      })
+      .addTo(hotspotLayer)
+      .bindPopup(`
+        🔥 Hotspot<br>
+        Lat: ${lat}<br>
+        Lon: ${lon}<br>
+        Confidence: ${conf}
+      `);
+
+    });
+
+    document.getElementById("jumlah").innerHTML = hotspotCount;
+
+    updateChart();
+
+    document.getElementById("status").innerHTML =
+      "✅ Update: " + new Date().toLocaleTimeString();
+
+  } catch(err){
+    document.getElementById("status").innerHTML = "❌ Error";
+    console.error(err);
+  }
+}
+
+// ================= WARNA =================
+function getColor(confidence) {
+  if (confidence < 40) return "green";
+  else if (confidence < 80) return "orange";
+  else return "red";
+}
+
+// ================= CHART =================
+var ctx = document.getElementById('chart').getContext('2d');
+
+var chart = new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: ['Hotspot'],
+    datasets: [{
+      label: 'Jumlah',
+      data: [0]
+    }]
+  }
+});
+
+function updateChart(){
+  chart.data.datasets[0].data = [hotspotCount];
+  chart.update();
+}
+
+// ================= WA =================
+function kirimWA(){
+
+  const msg = `🔥 HOTSPOT ALERT
+Jumlah hotspot: ${hotspotCount}
+Waktu: ${new Date().toLocaleString()}`;
+
+  fetch("https://api.fonnte.com/send", {
+    method: "POST",
+    headers: {
+      "Authorization": "LYUAUwyv3TNEUa4V75DL"
+    },
+    body: new URLSearchParams({
+      target: "6281279083398,628125845230,6285250132107",
+      message: msg
+    })
+  })
+  .then(res => res.json())
+  .then(data => console.log("WA terkirim:", data))
+  .catch(err => console.error("Error WA:", err));
+}
+
+// ================= LOAD =================
+fetchFIRMS();
+setInterval(fetchFIRMS, 300000);
+
+</script>
+
+</body>
+</html>
